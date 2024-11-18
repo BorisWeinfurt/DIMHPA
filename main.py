@@ -1,6 +1,7 @@
+from io import TextIOWrapper
 import os
 import json
-import typing
+from typing import Self
 
 TEMPFILE = 'temp_pdb'
 output_file = './output.txt'
@@ -13,11 +14,11 @@ class Atom:
         self.y= y
         self.z = z
 
-    def midpoint(self, other : Type[Atom]):
+    def midpoint(self, other : Self):
         # TODO
         ...
 
-    def distance(self, other : Atom):
+    def distance(self, other : Self):
         # TODO
         ...
 
@@ -45,21 +46,50 @@ def create_and_write_file(output_file : str, directory_path : str):
                 for item in os.listdir(directory_path):
                     item_path = os.path.join(directory_path, item)
                     with open(item_path, 'r') as input_file:
+
+                        # get pdb data from json file
                         content = json.load(input_file)['pdb_data']['pdb']
                         temp_pdb.write(content)
                         temp_pdb.seek(0, 0)
-                        os.system(f"./hbplus {TEMPFILE}.pdb")
 
-                        output_file.write(parse_hb_file(f"{TEMPFILE}.hb2"))
+                        # calculate hydrogen locations
+                        os.system(f"./hbplus {TEMPFILE}.pdb > /dev/null")
+
+                        # get atoms that represent mutation points
+                        temp_pdb.seek(0, 0)
+                        atom1 = None
+                        atom2 = None
+
+                        # get distances to mutation points
+                        distances = parse_hb_file(f"{TEMPFILE}.hb2",atom1,atom2)
+                        output_file.write(distances)
                     
                     output_file.write("\n" + "-" * 50 + "\n")
             
-        print(f"File created and updated successfully at: {output_file}")
     except Exception as e:
         print(f"An error occurred: {e}\n")
+        exit()
+
+"""
+Find a specific atom in a pdb file based on an atom name and residue num
+
+:param file: open file buffer to the target pdb file
+:param atom_name: The atom type 4 letter identifier to search for
+:param resigue_num: The residue number to search for
+"""
+def find_atom(file : TextIOWrapper, atom_name : str, residue_num : int) -> Atom:
+    ...
 
 
-def parse_hb_file(file):
+"""
+Look through each hydrogen bond outputted by HBPLUS and calculate the minimum 
+distance to a mutation point. 
+
+:param file: open file buffer to the target HBPLUS output file
+:param mutation1: Atom representing the first mutation
+:param mutation2: Atom representing the second mutation
+"""
+def parse_hb_file(file : TextIOWrapper, mutation1 : Atom, mutation2 : Atom):
     with open(file, 'r') as hb_data:
 
         return hb_data.read()
