@@ -1,14 +1,15 @@
 from io import TextIOWrapper
 import os
 import json
+import re
 import math
 
 from typing import Self, Dict , Tuple
 
 TEMPFILE = 'temp_pdb'
 output_file = './output.txt'
-# directory_path = '/research/jagodzinski/DATA/mutants/1hhp/1/2'
-directory_path = 'data'
+directory_path = '/research/jagodzinski/DATA/mutants/1hhp/1/2'
+# directory_path = 'data'
 PDB_Dict = Dict[Tuple[str, str], Tuple[float, float, float]]
 
 def main():
@@ -50,11 +51,11 @@ def create_and_write_file(output_file : str, directory_path : str):
 
     try:
         # Create and open output file
-        with open(output_file, 'w') as output_file:
+        open(output_file, 'w').close()
+        with open(output_file, 'a') as output_file:
 
             # Make a temporary file to put pdb data from json
             with open(f"./{TEMPFILE}.pdb", 'w') as temp_pdb:
-
                 # List all files in the specified directory
                 for item in os.listdir(directory_path):
                     ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
@@ -67,8 +68,9 @@ def create_and_write_file(output_file : str, directory_path : str):
                         temp_pdb.seek(0, 0)
                         
                         pdb_dict = build_dict(content)
+                        
                         # calculate hydrogen locations
-                        os.system(f"./hbplus.exe {TEMPFILE}.pdb")
+                        os.system(f"./hbplus {TEMPFILE}.pdb > err")
 
                         # get atoms that represent mutation points
                         atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1)
@@ -76,7 +78,7 @@ def create_and_write_file(output_file : str, directory_path : str):
 
                         # get distances to mutation points
                         distances = parse_hb_file(f"{TEMPFILE}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
-                        line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances])
+                        line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
                         output_file.write(line)
                     
     except Exception as e:
@@ -142,7 +144,7 @@ Given a JSON file from the research directory determing the locations and mutati
 
 :param mutation: name of the file currently being processed"""
 def parse_mutation_location(mutation : str) -> tuple[str, str, str, str]:
-    return mutation[9:16].split(sep="_")
+    return re.split("[_.]", mutation)[2:6]
 
 
 if __name__ == "__main__":
