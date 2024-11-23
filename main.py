@@ -8,12 +8,12 @@ from typing import Self, Dict , Tuple
 
 TEMPFILE = 'temp_pdb'
 output_file = './output.txt'
-directory_path = '/research/jagodzinski/DATA/mutants/1hhp/1/2'
+directory_path = '/research/jagodzinski/DATA/mutants/1hhp/100'
 # directory_path = 'data'
 PDB_Dict = Dict[Tuple[str, str], Tuple[float, float, float]]
 
 def main():
-    create_and_write_file(output_file=output_file, directory_path=directory_path)
+    create_and_write_file(output_file=output_file, directory_path=directory_path, tempfile=TEMPFILE)
 
 class Atom:
     def __init__(self, name : str, x : float, y : float, z : float):
@@ -47,7 +47,7 @@ and append content to the file.
 :param directory_path: The directory to look for files.
 :param append_content: The content to append to the file.
 """
-def create_and_write_file(output_file : str, directory_path : str):
+def create_and_write_file(output_file : str, directory_path : str, tempfile=str):
 
     try:
         # Create and open output file
@@ -55,56 +55,68 @@ def create_and_write_file(output_file : str, directory_path : str):
         with open(output_file, 'a') as output_file:
 
             # Make a temporary file to put pdb data from json
-            with open(f"./{TEMPFILE}.pdb", 'w') as temp_pdb:
+            with open(f"./{tempfile}.pdb", 'w') as temp_pdb:
+
                 # List all files in the specified directory
-                for item in os.listdir(directory_path):
-                    ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
-                    item_path = os.path.join(directory_path, item)
-                    with open(item_path, 'r') as input_file:
-                        # get pdb data from json file and put it into our temp file
-                        content = json.load(input_file)['pdb_data']['pdb']
-                        # content = input_file.read()
-                        temp_pdb.write(content)
-                        temp_pdb.seek(0, 0)
-                        
-                        pdb_dict = build_dict(content)
-                        
-                        # calculate hydrogen locations
-                        os.system(f"./hbplus {TEMPFILE}.pdb > err")
+                for (dirpath, dirnames, filenames) in os.walk(directory_path):
+                    print(f"analyzing: dirpath-{dirpath}")
+                    for file in filenames:
+                        item = dirpath + "/" + file
 
-                        # get atoms that represent mutation points
-                        atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1)
-                        atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2)
+                        ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
+                        if not (ins_typ1 == 'Q' and ins_typ2 == 'Q'):
+                            continue
 
-                        # get distances to mutation points
-                        distances = parse_hb_file(f"{TEMPFILE}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
-                        line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
-                        output_file.write(line)
+                        item_path = os.path.join(directory_path, item)
+                        with open(item_path, 'r') as input_file:
+
+
+                            # get pdb data from json file and put it into our temp file
+                            content = json.load(input_file)['pdb_data']['pdb']
+                            # content = input_file.read()
+                            temp_pdb.write(content)
+                            temp_pdb.seek(0, 0)
+                            
+
+                            # calculate hydrogen locations
+                            os.system(f"./hbplus {tempfile}.pdb -o > err")
+                            pdb_dict = build_dict("./" + tempfile + ".h")
+                            # get atoms that represent mutation points
+                            atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=one_to_three(ins_typ1))
+                            atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=one_to_three(ins_typ2))
+
+                            # get distances to mutation points
+                            distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
+                            line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
+                            output_file.write(line)
                     
     except Exception as e:
         print(f"An error occurred: {e}\n")
         exit()
 
-def find_atom(pdb_dict : PDB_Dict , atom_name : str, residue_num : str) -> Atom:
-    pos = pdb_dict[(residue_num, atom_name)]
+def find_atom(pdb_dict : PDB_Dict , atom_name : str, residue_num : str, residue_name : str) -> Atom:
+    pos = pdb_dict[(residue_num, atom_name, residue_name)]
     return Atom(atom_name, *pos)
     
 
-def build_dict(pdb_lines) -> PDB_Dict:
+def build_dict(pdb_file) -> PDB_Dict:
 
     dict = {}
-    for line in pdb_lines.splitlines():
-        if line.startswith("ATOM"):
-            residue_number = line[22:26].strip()
-            atom_name = line[12:16].strip()
-            record = (
-                float(line[30:38].strip()),
-                float(line[38:46].strip()),
-                float(line[46:54].strip()),
-            )
-            
-            key = (residue_number, atom_name)
-            dict[key] = record
+    with open(pdb_file, 'r') as pdb:
+        for line in pdb.readlines():
+            if line.startswith("ATOM"):
+                split = re.split('\s+', line)
+                residue_number = split[5].strip()
+                atom_name = split[2].strip()
+                residue_name = split[3].strip()
+
+                record = (
+                    float(split[6].strip()),
+                    float(split[7].strip()),
+                    float(split[8].strip()),
+                )
+                key = (residue_number, atom_name, residue_name)
+                dict[key] = record
     return dict
 
 """
@@ -119,14 +131,24 @@ distance to a mutation point.
 def parse_hb_file(hb_file : str, mutation1 : Atom, mutation2 : Atom, pdb_dict : PDB_Dict):
     with open(hb_file, 'r') as hblus_data:
         # skip the headers
-        data = hblus_data.readlines()[9:]
+        data = hblus_data.readlines()[8:]
         distances = []
         for line in data:
-            donor_atom_num, donor_atom_name = line[1:5].lstrip('0'), line[9:13].strip()
-            acceptor_atom_num, acceptor_atom_name = line[15:19].lstrip('0'), line[23:27].strip()
+            split = re.split('\s+', line)
+            donor_atom_res_num, donor_atom_name, donor_res_typ = split[0][1:5].lstrip('0'), split[1], split[0][6:10]
+            acceptor_atom_res_num, acceptor_atom_name, acceptor_res_typ = split[2][1:5].lstrip('0'), split[3], split[2][6:10]
 
-            donor = find_atom(pdb_dict=pdb_dict, atom_name=donor_atom_name, residue_num=donor_atom_num)
-            acceptor = find_atom(pdb_dict=pdb_dict, atom_name=acceptor_atom_name, residue_num=acceptor_atom_num)
+            if not (donor_atom_name == 'N' and 
+                    donor_atom_res_num == '10' and
+                    donor_res_typ == 'LEU' and 
+                    acceptor_atom_res_num == '8' and 
+                    acceptor_atom_name == 'O' and 
+                    acceptor_res_typ == 'ARG'):
+                continue
+                
+            print('found right hbond!')
+            donor = find_atom(pdb_dict=pdb_dict, atom_name=donor_atom_name, residue_num=donor_atom_res_num, residue_name=donor_res_typ)
+            acceptor = find_atom(pdb_dict=pdb_dict, atom_name=acceptor_atom_name, residue_num=acceptor_atom_res_num, residue_name=acceptor_res_typ)
             
             hydrogen_position = donor.midpoint(acceptor)
             
@@ -146,6 +168,29 @@ Given a JSON file from the research directory determing the locations and mutati
 def parse_mutation_location(mutation : str) -> tuple[str, str, str, str]:
     return re.split("[_.]", mutation)[2:6]
 
+
+def one_to_three(one_letter_code):
+    mapping = {'A':'ALA',
+               'R':'ARG',
+               'N':'ASN',
+               'D':'ASP',
+               'C':'CYS',
+               'Q':'GLN',
+               'E':'GLU',
+               'G':'GLY',
+               'H':'HIS',
+               'I':'ILE',
+               'L':'LEU',
+               'K':'LYS',
+               'M':'MET',
+               'F':'PHE',
+               'P':'PRO',
+               'S':'SER',
+               'T':'THR',
+               'W':'TRP',
+               'Y':'TYR',
+               'V':'VAL',}
+    return mapping[one_letter_code.upper()]
 
 if __name__ == "__main__":
     main()

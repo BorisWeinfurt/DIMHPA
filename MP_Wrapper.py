@@ -24,7 +24,7 @@ if __name__ == '__main__':
     # the math in the wrapper covers generating names for all the temp and output files as well as how many folders each process needs to examine
     # all the values we should have to touch are the number of processes and the protein protein_length
     # as well as any paths used anywhere
-    num_procs = 20
+    num_procs = 90
     protein_length = 101
     for i in range (0,num_procs):
         p = Process(target=wrapper, args=(i,int(protein_length/num_procs),protein_length,num_procs))

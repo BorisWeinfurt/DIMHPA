@@ -1,4 +1,4 @@
-HBPLUS Hydrogen Bond Calculator v 3.2            Nov 21 15:01:37 Pacific Standard Time 2024
+HBPLUS Hydrogen Bond Calculator v 3.2            Nov 22 15:59:34 PST 2024
 (c) I McDonald, D Naylor, D Jones and J Thornton 1993 All Rights Reserved.
 
 Configured for 100000 atoms and 24000 residues.
@@ -19,7 +19,7 @@ Looking at named input file for CONECT records . . .
 Reading PDB file "temp_pdb.pdb" for CONECTs . . .
 PDB file contained 0 CONECT records 
 	Hydrogens Recognized in Brookhaven File
-775 atoms selected from 101 residues.
+776 atoms selected from 101 residues.
 
 Found 1 elements of secondary structure and 1 chains.
 0 CONRECS used.
@@ -28,9 +28,10 @@ Checking for disulphide bridges . . .
 
 
 Adding Polar Hydrogens.
+Outputting PDB format file into temp_pdb.h . . .
 Opened output file "temp_pdb.hb2".
 Checking for hydrogen bonds . . . 
-WARNING:  3.24A between XXXX/A0071hHIS ND1 and 1 (H).
-WARNING:  3.24A between XXXX/A0071hHIS ND1 and 1 (H).
-WARNING:  3.24A between XXXX/A0071hHIS ND1 and 1 (H).
-66 hydrogen bonds found.
+WARNING:  3.24A between XXXX/A0069hHIS ND1 and 1 (H).
+WARNING:  3.24A between XXXX/A0069hHIS ND1 and 1 (H).
+WARNING:  3.24A between XXXX/A0069hHIS ND1 and 1 (H).
+69 hydrogen bonds found.
