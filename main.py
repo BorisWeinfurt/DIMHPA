@@ -8,12 +8,12 @@ from typing import Self, Dict , Tuple
 
 TEMPFILE = 'temp_pdb'
 output_file = './output.txt'
-directory_path = '/research/jagodzinski/DATA/mutants/1hhp/100'
+directory_path = '/research/jagodzinski/DATA/mutants/1hhp/1'
 # directory_path = 'data'
 PDB_Dict = Dict[Tuple[str, str], Tuple[float, float, float]]
 
 def main():
-    create_and_write_file(output_file=output_file, directory_path=directory_path, tempfile=TEMPFILE)
+    anaylze_outer_directory(output_file=output_file, directory_path=directory_path, tempfile=TEMPFILE)
 
 class Atom:
     def __init__(self, name : str, x : float, y : float, z : float):
@@ -40,14 +40,17 @@ class Atom:
         
 
 """
-Create and open a file at a specific path, list every file in a specified directory,
-and append content to the file.
+Analyzes a given directory from the /research/jagodzinski/DATA/mutants/*/* path
+this means that it should be a directory of directories that contain pdbs stored as json files
+
+Each pdb is obtained from json, run through hbplus, and then distances are analyzed
+via the hbplus output files
 
 :param file_path: The full path to the file to create and write.
 :param directory_path: The directory to look for files.
 :param append_content: The content to append to the file.
 """
-def create_and_write_file(output_file : str, directory_path : str, tempfile=str):
+def anaylze_outer_directory(output_file : str, directory_path : str, tempfile=str):
 
     try:
         # Create and open output file
@@ -78,7 +81,12 @@ def create_and_write_file(output_file : str, directory_path : str, tempfile=str)
 
                             # calculate hydrogen locations
                             os.system(f"./hbplus {tempfile}.pdb -o > err")
+
+                            # use .h file instead of original pdb to both
+                            # 1. account for possible uncertainty/duplicates in original pdb
+                            # 2. account for hydrogens that are not in the original pdb
                             pdb_dict = build_dict("./" + tempfile + ".h")
+
                             # get atoms that represent mutation points
                             atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=one_to_three(ins_typ1))
                             atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=one_to_three(ins_typ2))
@@ -87,16 +95,22 @@ def create_and_write_file(output_file : str, directory_path : str, tempfile=str)
                             distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
                             line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
                             output_file.write(line)
-                    
+                    exit()
     except Exception as e:
         print(f"An error occurred: {e}\n")
         exit()
 
+"""
+Find an atom from the pdb dictionary given the parameters
+"""
 def find_atom(pdb_dict : PDB_Dict , atom_name : str, residue_num : str, residue_name : str) -> Atom:
     pos = pdb_dict[(residue_num, atom_name, residue_name)]
     return Atom(atom_name, *pos)
     
-
+"""
+Build a dictionary of atoms from a pdb file
+NOTE: this is inteded to be used with the hblus output file NOT regular pdbs
+"""
 def build_dict(pdb_file) -> PDB_Dict:
 
     dict = {}
@@ -157,7 +171,9 @@ Given a JSON file from the research directory determing the locations and mutati
 def parse_mutation_location(mutation : str) -> tuple[str, str, str, str]:
     return re.split("[_.]", mutation)[2:6]
 
-
+"""
+Map the one letter abbreviations of amino acids to 3 letter ones
+"""
 def one_to_three(one_letter_code):
     mapping = {'A':'ALA',
                'R':'ARG',
