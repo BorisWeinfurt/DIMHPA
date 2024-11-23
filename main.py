@@ -64,8 +64,6 @@ def create_and_write_file(output_file : str, directory_path : str, tempfile=str)
                         item = dirpath + "/" + file
 
                         ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
-                        if not (ins_typ1 == 'Q' and ins_typ2 == 'Q'):
-                            continue
 
                         item_path = os.path.join(directory_path, item)
                         with open(item_path, 'r') as input_file:
@@ -138,15 +136,6 @@ def parse_hb_file(hb_file : str, mutation1 : Atom, mutation2 : Atom, pdb_dict : 
             donor_atom_res_num, donor_atom_name, donor_res_typ = split[0][1:5].lstrip('0'), split[1], split[0][6:10]
             acceptor_atom_res_num, acceptor_atom_name, acceptor_res_typ = split[2][1:5].lstrip('0'), split[3], split[2][6:10]
 
-            if not (donor_atom_name == 'N' and 
-                    donor_atom_res_num == '10' and
-                    donor_res_typ == 'LEU' and 
-                    acceptor_atom_res_num == '8' and 
-                    acceptor_atom_name == 'O' and 
-                    acceptor_res_typ == 'ARG'):
-                continue
-                
-            print('found right hbond!')
             donor = find_atom(pdb_dict=pdb_dict, atom_name=donor_atom_name, residue_num=donor_atom_res_num, residue_name=donor_res_typ)
             acceptor = find_atom(pdb_dict=pdb_dict, atom_name=acceptor_atom_name, residue_num=acceptor_atom_res_num, residue_name=acceptor_res_typ)
             
