@@ -95,7 +95,6 @@ def anaylze_outer_directory(output_file : str, directory_path : str, tempfile=st
                             distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
                             line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
                             output_file.write(line)
-                    exit()
     except Exception as e:
         print(f"An error occurred: {e}\n")
         exit()
