@@ -228,7 +228,10 @@ if __name__ == '__main__':
     # as well as any paths used anywhere
     num_procs = 3
     num_directories = 6
+    p_list = []
     for i in range (0,num_procs):
         p = Process(target=wrapper, args=(i,num_directories,num_procs))
         p.start()
+        p_list.append(p)
+    for p in p_list:
         p.join()
