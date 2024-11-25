@@ -72,7 +72,7 @@ via the hbplus output files
 :param directory_path: The directory to look for files.
 :param append_content: The content to append to the file.
 """
-def anaylze_outer_directories(output_file : str, directory_path : str, tempfile=str, directories_to_analyze : list):
+def anaylze_outer_directories(output_file : str, directory_path : str, tempfile : str, directories_to_analyze : list):
 
     try:
         # Create and open output file
@@ -84,8 +84,8 @@ def anaylze_outer_directories(output_file : str, directory_path : str, tempfile=
 
                 # List all files in the specified directory
                 for folder_ID in directories_to_analyze:
-                    temp_path = directory_path + '/' + str(folder_ID)
-                    for (dirpath, dirnames, filenames) in os.walk(directory_path):
+                    temp_path = directory_path + GLOBAL_PROTEIN + '/' + str(folder_ID)
+                    for (dirpath, dirnames, filenames) in os.walk(temp_path):
                         print(f"analyzing: dirpath-{dirpath}")
                         for file in filenames:
                             item = dirpath + "/" + file
@@ -112,8 +112,8 @@ def anaylze_outer_directories(output_file : str, directory_path : str, tempfile=
                                 pdb_dict = build_dict("./" + tempfile + ".h")
     
                                 # get atoms that represent mutation points
-                                atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping(ins_typ1))
-                                atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping(ins_typ2))
+                                atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping[ins_typ1])
+                                atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping[ins_typ2])
     
                                 # get distances to mutation points
                                 distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
