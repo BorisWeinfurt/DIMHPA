@@ -1,4 +1,5 @@
 from io import TextIOWrapper
+from multiprocessing import Process
 import os
 import json
 import re
@@ -6,14 +7,35 @@ import math
 
 from typing import Self, Dict , Tuple
 
-TEMPFILE = 'temp_pdb'
-output_file = './output.txt'
-directory_path = '/research/jagodzinski/DATA/mutants/1hhp/1'
+directory_path = '/research/jagodzinski/DATA/mutants/'
+GLOBAL_PROTEIN = '1hhp' # the protein to analyze
 # directory_path = 'data'
 PDB_Dict = Dict[Tuple[str, str], Tuple[float, float, float]]
 
-def main():
-    anaylze_outer_directory(output_file=output_file, directory_path=directory_path, tempfile=TEMPFILE)
+"""
+Map the one letter abbreviations of amino acids to 3 letter ones
+"""
+mapping = {'A':'ALA',
+               'R':'ARG',
+               'N':'ASN',
+               'D':'ASP',
+               'C':'CYS',
+               'Q':'GLN',
+               'E':'GLU',
+               'G':'GLY',
+               'H':'HIS',
+               'I':'ILE',
+               'L':'LEU',
+               'K':'LYS',
+               'M':'MET',
+               'F':'PHE',
+               'P':'PRO',
+               'S':'SER',
+               'T':'THR',
+               'W':'TRP',
+               'Y':'TYR',
+               'V':'VAL',}
+
 
 class Atom:
     def __init__(self, name : str, x : float, y : float, z : float):
@@ -50,7 +72,7 @@ via the hbplus output files
 :param directory_path: The directory to look for files.
 :param append_content: The content to append to the file.
 """
-def anaylze_outer_directory(output_file : str, directory_path : str, tempfile=str):
+def anaylze_outer_directories(output_file : str, directory_path : str, tempfile : str, directories_to_analyze : list):
 
     try:
         # Create and open output file
@@ -61,40 +83,42 @@ def anaylze_outer_directory(output_file : str, directory_path : str, tempfile=st
             with open(f"./{tempfile}.pdb", 'w') as temp_pdb:
 
                 # List all files in the specified directory
-                for (dirpath, dirnames, filenames) in os.walk(directory_path):
-                    print(f"analyzing: dirpath-{dirpath}")
-                    for file in filenames:
-                        item = dirpath + "/" + file
-
-                        ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
-
-                        item_path = os.path.join(directory_path, item)
-                        with open(item_path, 'r') as input_file:
-
-
-                            # get pdb data from json file and put it into our temp file
-                            content = json.load(input_file)['pdb_data']['pdb']
-                            # content = input_file.read()
-                            temp_pdb.write(content)
-                            temp_pdb.seek(0, 0)
-                            
-
-                            # calculate hydrogen locations
-                            os.system(f"./hbplus {tempfile}.pdb -o > err")
-
-                            # use .h file instead of original pdb to both
-                            # 1. account for possible uncertainty/duplicates in original pdb
-                            # 2. account for hydrogens that are not in the original pdb
-                            pdb_dict = build_dict("./" + tempfile + ".h")
-
-                            # get atoms that represent mutation points
-                            atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=one_to_three(ins_typ1))
-                            atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=one_to_three(ins_typ2))
-
-                            # get distances to mutation points
-                            distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
-                            line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
-                            output_file.write(line)
+                for folder_ID in directories_to_analyze:
+                    temp_path = directory_path + GLOBAL_PROTEIN + '/' + str(folder_ID)
+                    for (dirpath, dirnames, filenames) in os.walk(temp_path):
+                        print(f"analyzing: dirpath-{dirpath}")
+                        for file in filenames:
+                            item = dirpath + "/" + file
+    
+                            ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
+    
+                            item_path = os.path.join(directory_path, item)
+                            with open(item_path, 'r') as input_file:
+    
+    
+                                # get pdb data from json file and put it into our temp file
+                                content = json.load(input_file)['pdb_data']['pdb']
+                                # content = input_file.read()
+                                temp_pdb.write(content)
+                                temp_pdb.seek(0, 0)
+                                
+    
+                                # calculate hydrogen locations
+                                os.system(f"./hbplus {tempfile}.pdb -o > err")
+    
+                                # use .h file instead of original pdb to both
+                                # 1. account for possible uncertainty/duplicates in original pdb
+                                # 2. account for hydrogens that are not in the original pdb
+                                pdb_dict = build_dict("./" + tempfile + ".h")
+    
+                                # get atoms that represent mutation points
+                                atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping[ins_typ1])
+                                atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping[ins_typ2])
+    
+                                # get distances to mutation points
+                                distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
+                                line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
+                                output_file.write(line)
     except Exception as e:
         print(f"An error occurred: {e}\n")
         exit()
@@ -170,31 +194,44 @@ Given a JSON file from the research directory determing the locations and mutati
 def parse_mutation_location(mutation : str) -> tuple[str, str, str, str]:
     return re.split("[_.]", mutation)[2:6]
 
-"""
-Map the one letter abbreviations of amino acids to 3 letter ones
-"""
-def one_to_three(one_letter_code):
-    mapping = {'A':'ALA',
-               'R':'ARG',
-               'N':'ASN',
-               'D':'ASP',
-               'C':'CYS',
-               'Q':'GLN',
-               'E':'GLU',
-               'G':'GLY',
-               'H':'HIS',
-               'I':'ILE',
-               'L':'LEU',
-               'K':'LYS',
-               'M':'MET',
-               'F':'PHE',
-               'P':'PRO',
-               'S':'SER',
-               'T':'THR',
-               'W':'TRP',
-               'Y':'TYR',
-               'V':'VAL',}
-    return mapping[one_letter_code.upper()]
 
-if __name__ == "__main__":
-    main()
+"""
+Gives each process a file to do read/write to and splits up the input files based on how many directories there are
+params: 
+id - the id of the process
+num_directories - the total number of directories to analyze
+num_procs - the number of processes working on the task
+"""
+
+def wrapper(id,num_directories,num_procs):
+    # generate file names for work
+    temp_file = "temp_file_" + str(id)
+    out_file = 'outfile_' + str(id)
+    #find the number of folders to look at
+    start_step = id
+    #quick check to make sure we grab every folder, last process might have more folders than the rest BUT later folders are smaller so that's not bad
+    #We could try and add some math to distribute the load more evenly, like give each process every ith valued folder
+        
+    folders_to_analyze = list(range(start_step,num_directories,num_procs))
+    #A check to make sure hte last folder is included
+    if id == num_procs-1 and num_directories not in folders_to_analyze:
+        folders_to_analyze.append(num_directories)
+    
+    #this is our final list with what we should need
+    anaylze_outer_directories(output_file=temp_file, directory_path=directory_path, tempfile=out_file,directories_to_analyze=folders_to_analyze)
+    
+
+if __name__ == '__main__':
+    # Just boot up however many processes we want and have them start the function
+    # the math in the wrapper covers generating names for all the temp and output files as well as how many folders each process needs to examine
+    # all the values we should have to touch are the number of processes and the protein protein_length
+    # as well as any paths used anywhere
+    num_procs = 3
+    num_directories = 6
+    p_list = []
+    for i in range (0,num_procs):
+        p = Process(target=wrapper, args=(i,num_directories,num_procs))
+        p.start()
+        p_list.append(p)
+    for p in p_list:
+        p.join()
