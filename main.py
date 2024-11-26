@@ -218,16 +218,17 @@ def wrapper(id,num_directories,num_procs):
         folders_to_analyze.append(num_directories)
     
     #this is our final list with what we should need
-    anaylze_outer_directories(output_file=temp_file, directory_path=directory_path, tempfile=out_file,directories_to_analyze=folders_to_analyze)
+    anaylze_outer_directories(output_file=out_file, directory_path=directory_path, tempfile=temp_file,directories_to_analyze=folders_to_analyze)
     
+    os.remove(temp_file)
 
 if __name__ == '__main__':
     # Just boot up however many processes we want and have them start the function
     # the math in the wrapper covers generating names for all the temp and output files as well as how many folders each process needs to examine
     # all the values we should have to touch are the number of processes and the protein protein_length
     # as well as any paths used anywhere
-    num_procs = 3
-    num_directories = 6
+    num_procs = 100
+    num_directories = 101
     p_list = []
     for i in range (0,num_procs):
         p = Process(target=wrapper, args=(i,num_directories,num_procs))
