@@ -5,11 +5,9 @@ import json
 import re
 import math
 
+import sys
 from typing import Self, Dict , Tuple
 
-directory_path = '/research/jagodzinski/DATA/mutants/'
-GLOBAL_PROTEIN = '1hhp' # the protein to analyze
-# directory_path = 'data'
 PDB_Dict = Dict[Tuple[str, str], Tuple[float, float, float]]
 
 """
@@ -72,8 +70,7 @@ via the hbplus output files
 :param directory_path: The directory to look for files.
 :param append_content: The content to append to the file.
 """
-def anaylze_outer_directories(output_file : str, directory_path : str, tempfile : str, directories_to_analyze : list):
-
+def anaylze_outer_directories(output_file : str, directory_path : str, tempfile : str, paths_to_analyze : list):
     try:
         # Create and open output file
         open(output_file, 'w').close()
@@ -83,7 +80,7 @@ def anaylze_outer_directories(output_file : str, directory_path : str, tempfile 
             with open(f"./{tempfile}.pdb", 'w') as temp_pdb:
 
                 # List all files in the specified directory
-                for folder_ID in directories_to_analyze:
+                for folder_ID in paths_to_analyze:
                     temp_path = directory_path + GLOBAL_PROTEIN + '/' + str(folder_ID)
                     for (dirpath, dirnames, filenames) in os.walk(temp_path):
                         print(f"analyzing: dirpath-{dirpath}")
@@ -169,7 +166,7 @@ def parse_hb_file(hb_file : str, mutation1 : Atom, mutation2 : Atom, pdb_dict : 
         data = hblus_data.readlines()[8:]
         distances = []
         for line in data:
-            split = re.split('\s+', line)
+            split = re.split('\\s+', line)
             donor_atom_res_num, donor_atom_name, donor_res_typ = split[0][1:5].lstrip('0'), split[1], split[0][6:10]
             acceptor_atom_res_num, acceptor_atom_name, acceptor_res_typ = split[2][1:5].lstrip('0'), split[3], split[2][6:10]
 
@@ -199,39 +196,69 @@ def parse_mutation_location(mutation : str) -> tuple[str, str, str, str]:
 Gives each process a file to do read/write to and splits up the input files based on how many directories there are
 params: 
 id - the id of the process
-num_directories - the total number of directories to analyze
+file_list - the paths to the files this process should analyze
 num_procs - the number of processes working on the task
 """
 
-def wrapper(id,num_directories,num_procs):
+def wrapper(id,file_list_list,result_directory):
     # generate file names for work
-    temp_file = "temp_file_" + str(id)
-    out_file = 'outfile_' + str(id)
-    #find the number of folders to look at
-    start_step = id
-    #quick check to make sure we grab every folder, last process might have more folders than the rest BUT later folders are smaller so that's not bad
-    #We could try and add some math to distribute the load more evenly, like give each process every ith valued folder
-        
-    folders_to_analyze = list(range(start_step,num_directories,num_procs))
-    #A check to make sure hte last folder is included
-    if id == num_procs-1 and num_directories not in folders_to_analyze:
-        folders_to_analyze.append(num_directories)
+    temp_file = result_directory + "/temp_file_" + str(id)
+    out_file = result_directory + '/outfile_' + str(id)
     
     #this is our final list with what we should need
-    anaylze_outer_directories(output_file=out_file, directory_path=directory_path, tempfile=temp_file,directories_to_analyze=folders_to_analyze)
+    anaylze_outer_directories(output_file=out_file, directory_path=directory_path, tempfile=temp_file,paths_to_analyze=folders_to_analyze)
     
     os.remove(temp_file)
+
+
+def get_file_paths(directory):
+    """Recursively get all file paths in the inner directories."""
+    file_paths = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            file_paths.append(os.path.join(root, file))
+    return file_paths
+
+def split_files(file_paths, num_processes):
+    """Split the file paths into chunks for each process."""
+    chunk_size = len(file_paths) // num_processes
+    remainder = len(file_paths) % num_processes
+    chunks = []
+    start = 0
+    
+    for i in range(num_processes):
+        end = start + chunk_size + (1 if i < remainder else 0)
+        chunks.append(file_paths[start:end])
+        start = end
+    return chunks
+
+
 
 if __name__ == '__main__':
     # Just boot up however many processes we want and have them start the function
     # the math in the wrapper covers generating names for all the temp and output files as well as how many folders each process needs to examine
     # all the values we should have to touch are the number of processes and the protein protein_length
     # as well as any paths used anywhere
-    num_procs = 100
+    if len(sys.argv) < 2:
+        print("Usage: python script.py <directory>")
+        exit(1)
+    
+    num_procs = 3
     num_directories = 101
     p_list = []
+    
+    mutant = sys.argv[1]
+    # directory_path = '/research/jagodzinski/DATA/mutants/'
+    directory_path = ''
+    
+    all_file_paths = get_file_paths(directory=directory_path+mutant)
+    chunks = split_files(file_paths=all_file_paths, num_processes=num_procs)
+    
+    result_directory = mutant + "_results"
+    os.makedirs(result_directory, exist_ok=True)
+    
     for i in range (0,num_procs):
-        p = Process(target=wrapper, args=(i,num_directories,num_procs))
+        p = Process(target=wrapper, args=(i,chunks[i], result_directory))
         p.start()
         p_list.append(p)
     for p in p_list:
