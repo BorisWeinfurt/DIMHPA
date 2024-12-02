@@ -1,3 +1,4 @@
+import glob
 from io import TextIOWrapper
 from multiprocessing import Process
 import os
@@ -5,8 +6,9 @@ import json
 import re
 import math
 
+import shutil
 import sys
-from typing import Self, Dict , Tuple
+from typing import Dict , Tuple
 
 PDB_Dict = Dict[Tuple[str, str], Tuple[float, float, float]]
 
@@ -45,7 +47,7 @@ class Atom:
     def __repr__(self):
         return f"Atom(name={self.name}, x={self.x}, y={self.y}, z={self.z})"
 
-    def midpoint(self, other: Self):
+    def midpoint(self, other):
         """
         Calculate the midpoint between this atom and another atom.
         Returns a new Atom representing the midpoint.
@@ -70,55 +72,44 @@ via the hbplus output files
 :param directory_path: The directory to look for files.
 :param append_content: The content to append to the file.
 """
-def anaylze_outer_directories(output_file : str, directory_path : str, tempfile : str, paths_to_analyze : list):
+def anaylze_file(output_file : str, tempfile : str, paths_to_analyze : list):
+    
     try:
         # Create and open output file
-        open(output_file, 'w').close()
         with open(output_file, 'a') as output_file:
 
             # Make a temporary file to put pdb data from json
             with open(f"./{tempfile}.pdb", 'w') as temp_pdb:
 
                 # List all files in the specified directory
-                for folder_ID in paths_to_analyze:
-                    temp_path = directory_path + GLOBAL_PROTEIN + '/' + str(folder_ID)
-                    for (dirpath, dirnames, filenames) in os.walk(temp_path):
-                        print(f"analyzing: dirpath-{dirpath}")
-                        for file in filenames:
-                            item = dirpath + "/" + file
-    
-                            ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(item)
-    
-                            item_path = os.path.join(directory_path, item)
-                            with open(item_path, 'r') as input_file:
-    
-    
-                                # get pdb data from json file and put it into our temp file
-                                content = json.load(input_file)['pdb_data']['pdb']
-                                # content = input_file.read()
-                                temp_pdb.write(content)
-                                temp_pdb.seek(0, 0)
-                                
-    
-                                # calculate hydrogen locations
-                                os.system(f"./hbplus {tempfile}.pdb -o > err")
-    
-                                # use .h file instead of original pdb to both
-                                # 1. account for possible uncertainty/duplicates in original pdb
-                                # 2. account for hydrogens that are not in the original pdb
-                                pdb_dict = build_dict("./" + tempfile + ".h")
-    
-                                # get atoms that represent mutation points
-                                atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping[ins_typ1])
-                                atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping[ins_typ2])
-    
-                                # get distances to mutation points
-                                distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
-                                line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
-                                output_file.write(line)
+                for file_path in paths_to_analyze:
+                    ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(file_path)
+
+                    with open("../" + file_path, 'r') as input_file:
+
+                        # get pdb data from json file and put it into our temp file
+                        # content = json.load(input_file)['pdb_data']['pdb']
+                        content = input_file.read()
+                        temp_pdb.write(content)
+                        temp_pdb.seek(0, 0)
+                        
+                        # calculate hydrogen locations
+                        os.system(f"../hbplus {tempfile}.pdb -o > err")
+
+                        # use .h file instead of original pdb to both
+                        # 1. account for possible uncertainty/duplicates in original pdb
+                        # 2. account for hydrogens that are not in the original pdb
+                        pdb_dict = build_dict(tempfile + ".h")
+                        # get atoms that represent mutation points
+                        atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping[ins_typ1])
+                        atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping[ins_typ2])
+
+                        # get distances to mutation points
+                        distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
+                        line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
+                        output_file.write(line)
     except Exception as e:
         print(f"An error occurred: {e}\n")
-        exit()
 
 """
 Find an atom from the pdb dictionary given the parameters
@@ -200,15 +191,18 @@ file_list - the paths to the files this process should analyze
 num_procs - the number of processes working on the task
 """
 
-def wrapper(id,file_list_list,result_directory):
+def wrapper(id,file_list,result_directory):
     # generate file names for work
-    temp_file = result_directory + "/temp_file_" + str(id)
-    out_file = result_directory + '/outfile_' + str(id)
+    temp_file = "temp_file_" + str(id)
+    out_file = 'outfile_' + str(id)
     
     #this is our final list with what we should need
-    anaylze_outer_directories(output_file=out_file, directory_path=directory_path, tempfile=temp_file,paths_to_analyze=folders_to_analyze)
+    os.chdir(result_directory)
+    anaylze_file(output_file=out_file, tempfile=temp_file,paths_to_analyze=file_list)
     
-    os.remove(temp_file)
+    os.remove(temp_file + ".h")
+    os.remove(temp_file + ".hb2")
+    os.remove(temp_file + ".pdb")
 
 
 def get_file_paths(directory):
@@ -232,7 +226,14 @@ def split_files(file_paths, num_processes):
         start = end
     return chunks
 
+def combine_data(data_path):
+    outfilename = "output.txt"
 
+    with open(outfilename, 'wb') as outfile:
+        for filename in glob.glob(data_path + ' /*'):
+
+            with open(filename, 'rb') as readfile:
+                shutil.copyfileobj(readfile, outfile)
 
 if __name__ == '__main__':
     # Just boot up however many processes we want and have them start the function
@@ -243,8 +244,7 @@ if __name__ == '__main__':
         print("Usage: python script.py <directory>")
         exit(1)
     
-    num_procs = 3
-    num_directories = 101
+    num_procs = 5
     p_list = []
     
     mutant = sys.argv[1]
@@ -261,5 +261,18 @@ if __name__ == '__main__':
         p = Process(target=wrapper, args=(i,chunks[i], result_directory))
         p.start()
         p_list.append(p)
+        
+    # wait for all processes to finish
     for p in p_list:
         p.join()
+        
+    # remove junk files
+    os.remove(result_directory + "/err")
+    os.remove(result_directory + "/hbdebug.dat")
+    
+    # combine data into a single file
+    combine_data(data_path=result_directory)
+    
+    shutil.rmtree(result_directory)
+    
+    
