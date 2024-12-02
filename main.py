@@ -68,9 +68,9 @@ this means that it should be a directory of directories that contain pdbs stored
 Each pdb is obtained from json, run through hbplus, and then distances are analyzed
 via the hbplus output files
 
-:param file_path: The full path to the file to create and write.
-:param directory_path: The directory to look for files.
-:param append_content: The content to append to the file.
+:param output_file: the name of the output file
+:param tempfile: the name of the temporary file
+:param paths_to_analyze: a list of paths of filenames this process should analyze
 """
 def anaylze_file(output_file : str, tempfile : str, paths_to_analyze : list):
     
@@ -79,7 +79,7 @@ def anaylze_file(output_file : str, tempfile : str, paths_to_analyze : list):
         with open(output_file, 'a') as output_file:
 
             # Make a temporary file to put pdb data from json
-            with open(f"./{tempfile}.pdb", 'w') as temp_pdb:
+            with open(f"{tempfile}.pdb", 'w') as temp_pdb:
 
                 # List all files in the specified directory
                 for file_path in paths_to_analyze:
@@ -226,10 +226,9 @@ def split_files(file_paths, num_processes):
         start = end
     return chunks
 
-def combine_data(data_path):
-    outfilename = "output.txt"
+def combine_data(data_path, output_file):
 
-    with open(outfilename, 'wb') as outfile:
+    with open(output_file, 'wb') as outfile:
         for filename in glob.glob(data_path + ' /*'):
 
             with open(filename, 'rb') as readfile:
@@ -244,7 +243,7 @@ if __name__ == '__main__':
         print("Usage: python script.py <directory>")
         exit(1)
     
-    num_procs = 5
+    num_procs = 7
     p_list = []
     
     mutant = sys.argv[1]
@@ -257,6 +256,7 @@ if __name__ == '__main__':
     result_directory = mutant + "_results"
     os.makedirs(result_directory, exist_ok=True)
     
+    # run each process on the a chunk of the files
     for i in range (0,num_procs):
         p = Process(target=wrapper, args=(i,chunks[i], result_directory))
         p.start()
@@ -271,7 +271,7 @@ if __name__ == '__main__':
     os.remove(result_directory + "/hbdebug.dat")
     
     # combine data into a single file
-    combine_data(data_path=result_directory)
+    combine_data(data_path=result_directory, output_file = result_directory + '.txt')
     
     shutil.rmtree(result_directory)
     
