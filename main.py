@@ -88,8 +88,8 @@ def anaylze_file(output_file : str, tempfile : str, paths_to_analyze : list):
                     with open("../" + file_path, 'r') as input_file:
 
                         # get pdb data from json file and put it into our temp file
-                        # content = json.load(input_file)['pdb_data']['pdb']
-                        content = input_file.read()
+                        content = json.load(input_file)['pdb_data']['pdb']
+                        # content = input_file.read()
                         temp_pdb.write(content)
                         temp_pdb.seek(0, 0)
                         
@@ -247,8 +247,8 @@ if __name__ == '__main__':
     p_list = []
     
     mutant = sys.argv[1]
-    # directory_path = '/research/jagodzinski/DATA/mutants/'
-    directory_path = ''
+    directory_path = '/research/jagodzinski/DATA/mutants/'
+    # directory_path = ''
     
     all_file_paths = get_file_paths(directory=directory_path+mutant)
     chunks = split_files(file_paths=all_file_paths, num_processes=num_procs)
