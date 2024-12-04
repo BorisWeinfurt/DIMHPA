@@ -84,32 +84,33 @@ def anaylze_file(output_file : str, tempfile : str, paths_to_analyze : list):
                 # List all files in the specified directory
                 for file_path in paths_to_analyze:
                     ins_loc1, ins_typ1, ins_loc2, ins_typ2 = parse_mutation_location(file_path)
+                    try:
+                        with open(file_path, 'r') as input_file:
+                            # get pdb data from json file and put it into our temp file
+                            content = json.load(input_file)['pdb_data']['pdb']
+                            # content = input_file.read()
+                            temp_pdb.write(content)
+                            temp_pdb.seek(0, 0)
+                            
+                            # calculate hydrogen locations
+                            os.system(f'~/CSCI597/project/DIMHPA/hbplus {tempfile}.pdb -o > err')
 
-                    with open("../" + file_path, 'r') as input_file:
+                            # use .h file instead of original pdb to both
+                            # 1. account for possible uncertainty/duplicates in original pdb
+                            # 2. account for hydrogens that are not in the original pdb
+                            pdb_dict = build_dict(tempfile + ".h")
+                            # get atoms that represent mutation points
+                            atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping[ins_typ1])
+                            atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping[ins_typ2])
 
-                        # get pdb data from json file and put it into our temp file
-                        content = json.load(input_file)['pdb_data']['pdb']
-                        # content = input_file.read()
-                        temp_pdb.write(content)
-                        temp_pdb.seek(0, 0)
-                        
-                        # calculate hydrogen locations
-                        os.system(f"../hbplus {tempfile}.pdb -o > err")
-
-                        # use .h file instead of original pdb to both
-                        # 1. account for possible uncertainty/duplicates in original pdb
-                        # 2. account for hydrogens that are not in the original pdb
-                        pdb_dict = build_dict(tempfile + ".h")
-                        # get atoms that represent mutation points
-                        atom1 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc1, residue_name=mapping[ins_typ1])
-                        atom2 = find_atom(pdb_dict=pdb_dict, atom_name='CA', residue_num=ins_loc2, residue_name=mapping[ins_typ2])
-
-                        # get distances to mutation points
-                        distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
-                        line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
-                        output_file.write(line)
+                            # get distances to mutation points
+                            distances = parse_hb_file(f"{tempfile}.hb2", mutation1=atom1, mutation2=atom2, pdb_dict=pdb_dict)
+                            line = " ".join([ins_loc1, ins_typ1, ins_loc2, ins_typ2, distances]) + "\n"
+                            output_file.write(line)
+                    except Exception as e:
+                        print(f"A single file had an error: {e}\n")
     except Exception as e:
-        print(f"An error occurred: {e}\n")
+        print(f"An unrecoverable error occurred: {e}\n")
 
 """
 Find an atom from the pdb dictionary given the parameters
@@ -170,7 +171,7 @@ def parse_hb_file(hb_file : str, mutation1 : Atom, mutation2 : Atom, pdb_dict : 
                 mutation1.distance(hydrogen_position),
                 mutation2.distance(hydrogen_position),
                 )
-            distances.append(min_distance)
+            distances.append(int(min_distance))
             
         return " ".join(map(str, distances))
             
@@ -199,7 +200,6 @@ def wrapper(id,file_list,result_directory):
     #this is our final list with what we should need
     os.chdir(result_directory)
     anaylze_file(output_file=out_file, tempfile=temp_file,paths_to_analyze=file_list)
-    
     os.remove(temp_file + ".h")
     os.remove(temp_file + ".hb2")
     os.remove(temp_file + ".pdb")
@@ -229,8 +229,8 @@ def split_files(file_paths, num_processes):
 def combine_data(data_path, output_file):
 
     with open(output_file, 'wb') as outfile:
-        for filename in glob.glob(data_path + ' /*'):
 
+        for filename in glob.glob(data_path + '/*'):
             with open(filename, 'rb') as readfile:
                 shutil.copyfileobj(readfile, outfile)
 
@@ -243,17 +243,18 @@ if __name__ == '__main__':
         print("Usage: python script.py <directory>")
         exit(1)
     
-    num_procs = 7
+    num_procs = 20
     p_list = []
     
     mutant = sys.argv[1]
     directory_path = '/research/jagodzinski/DATA/mutants/'
     # directory_path = ''
-    
+    print("getting chunks")
     all_file_paths = get_file_paths(directory=directory_path+mutant)
     chunks = split_files(file_paths=all_file_paths, num_processes=num_procs)
-    
-    result_directory = mutant + "_results"
+    print("starting processes")
+
+    result_directory = '/research/jagodzinski/DATA/mutants/distanceCalculations/' + mutant + "_results"
     os.makedirs(result_directory, exist_ok=True)
     
     # run each process on the a chunk of the files
